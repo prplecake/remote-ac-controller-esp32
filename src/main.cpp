@@ -2,11 +2,36 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
+#include <../lib/DHT/dht_nonblocking.h>
 #include "Credentials.h"
 
 WebServer server(80);
 
-#define LED 13
+#define LED 23
+#define DHT_SENSOR_PIN 22
+#define DHT_SENSOR_TYPE DHT_TYPE_11
+DHT_nonblocking dht_sensor(DHT_SENSOR_PIN, DHT_SENSOR_TYPE);
+
+float temperature;
+float humidity;
+
+/*
+ * Poll for a measurement, keeping the state machine alive. Returns
+ * true if a measurement is available.
+ */
+static bool measure_environment(float *temperature, float *humidity) {
+    static unsigned long measurement_timestamp = millis();
+
+    /* Measure once every four seconds. */
+    if (millis() - measurement_timestamp > 4000ul) {
+        if (dht_sensor.measure(temperature, humidity)) {
+            measurement_timestamp = millis();
+            return true;
+        }
+    }
+
+    return false;
+}
 
 /*
  * Handle the root path.
@@ -37,8 +62,22 @@ void handleNotFound() {
     digitalWrite(LED, LOW);
 }
 
-__attribute__((unused)) void setup( )
-{
+/*
+ * Handle the /data path.
+ * Returns DHT11 sensor information.
+ */
+void handleDataRoute() {
+    digitalWrite(LED, HIGH);
+    float temp_f = temperature * 1.8000f + 32.00f;
+    server.send(
+            200,
+            "application/json",
+            "{\"Temperature\":" + String(temperature) +
+            ",\"Humidity\":" + String(humidity) + "}");
+    digitalWrite(LED, LOW);
+}
+
+__attribute__((unused)) void setup() {
     pinMode(LED, OUTPUT);
     digitalWrite(LED, LOW);
     Serial.begin(115200);
@@ -75,6 +114,8 @@ __attribute__((unused)) void setup( )
         server.send(200, "text/plain", "this works as well");
     });
 
+    server.on("/data", handleDataRoute);
+
     server.onNotFound(handleNotFound);
 
     server.begin();
@@ -84,8 +125,16 @@ __attribute__((unused)) void setup( )
 /*
  * Main program loop.
  */
-__attribute__((unused)) void loop( )
-{
+__attribute__((unused)) void loop() {
     server.handleClient();
     delay(2);  // Allow the CPU to switch to other tasks
+    if(measure_environment(&temperature, &humidity))
+    {
+        float temp_f = temperature * 1.8000 + 32.00;
+        Serial.print( "T = " );
+        Serial.print( temp_f, 4 );
+        Serial.print( " deg. F, H = " );
+        Serial.print( humidity, 2 );
+        Serial.println( "%" );
+    }
 }
