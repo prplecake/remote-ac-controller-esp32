@@ -71,9 +71,9 @@ void handleDataRoute() {
     float temp_f = temperature * 1.8000f + 32.00f;
     server.send(
             200,
-            "text/plain",
-            "Temperature: " + String(temp_f) + " F (" + String(temperature) + " C)\nHumidity: " + String(humidity) +
-            " %");
+            "application/json",
+            "{\"Temperature\":" + String(temperature) +
+            ",\"Humidity\":" + String(humidity) + "}");
     digitalWrite(LED, LOW);
 }
 
